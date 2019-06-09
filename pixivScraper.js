@@ -1,6 +1,7 @@
 const puppeteer = require('puppeteer');
 const $ = require('cheerio');
 const fs = require("fs");
+var sizeOf = require('image-size');
 var readline = require('readline-sync');
 const loginUrl = 'https://accounts.pixiv.net/login?';	
 const pixivUrl = 'https://www.pixiv.net/';
@@ -12,8 +13,6 @@ const cookiesFilePath = "src/loginCookies.json"
 
 async function logIn(browser, page){
 	if (fs.existsSync(cookiesFilePath)) {
-		//file exists
-		console.log("found");
 	} else {
 		fs.writeFile(cookiesFilePath, '', function (err) {
 			if (err) throw err;
@@ -29,12 +28,10 @@ async function logIn(browser, page){
 			for (let cookie of cookiesArr) {
 				await page.setCookie(cookie);
 		}
-		console.log('Session has been loaded in the browser');
 		}
 	}
 	await page.goto(loginUrl);
 	//await page.waitForNavigation();
-	console.log(page.url()); 
 	while (page.url() != pixivUrl){ //while not logged in
 		if (!firstTime){
 			console.log("Failed to log in");
@@ -50,13 +47,32 @@ async function logIn(browser, page){
 		await page.waitForNavigation({ waitUntil: 'networkidle0' });
 	} 
 	console.log("Logged in");
-	await page.goto("https://www.pixiv.net/member_illust.php?id=2087042&type=illust");
-	page.screenshot({path: 'full1.png', fullPage: true});
 
 	// Write Cookies
 	const cookiesObject = await page.cookies();
 	fs.writeFileSync(cookiesFilePath, JSON.stringify(cookiesObject));
 	console.log('Session has been saved to ' + cookiesFilePath);
+}
+
+async function stepThroughArtist(browser, page, artistID, filter){
+	artistURL = "https://www.pixiv.net/member_illust.php?id=" + artistID + "&type=illust";
+	await page.goto(artistURL);
+	console.log(page.url());
+	page.on('console', consoleObj => console.log(consoleObj.text()));
+	//await page.screenshot({path: 'test.png', fullPage: true});
+	page.evaluate(() => {
+		var container = document.querySelector("#root");
+		var hits = container.querySelectorAll("li > div > a");
+		console.log(hits.length);
+		console.log(hits[0].innerText);
+		for (i = 0; i < hits.length ; i++){
+			console.log(i);
+			console.log(hits[i].innerText);
+			console.log(hits[i].innerHTML);
+			console.log(hits[i].href);
+		}
+	});
+	
 }
 
 (async() => {
@@ -66,4 +82,7 @@ async function logIn(browser, page){
 	await page.screenshot({path: 'new.png', fullPage: true});
 	await page.goto("https://www.pixiv.net/member_illust.php?id=24218478&type=illust");
 	await page.screenshot({path: 'wanke.png', fullPage: true});
+	//const images = await page.$$eval('img', imgs => imgs.map(img => img.naturalWidth));
+	//console.log(images); //this gets the image width 
+	stepThroughArtist(browser, page, 24218478);
 })();
