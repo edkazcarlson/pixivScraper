@@ -10,6 +10,8 @@ const usernameXpath = "//input[@autocomplete='username']";
 const passwordXpath = "//input[@autocomplete='current-password']";	
 const loginXpath = "#LoginComponent > form > button";
 const cookiesFilePath = "src/loginCookies.json"
+const maxPicPerPage = 48;
+
 
 async function logIn(browser, page){
 	if (fs.existsSync(cookiesFilePath)) {
@@ -54,24 +56,49 @@ async function logIn(browser, page){
 	console.log('Session has been saved to ' + cookiesFilePath);
 }
 
-async function stepThroughArtist(browser, page, artistID, filter){
-	artistURL = "https://www.pixiv.net/member_illust.php?id=" + artistID + "&type=illust";
-	await page.goto(artistURL);
+async function stepThroughArtist(browser, page, artistID, filter, fArgs){
+	var acceptedPics = [];
+	var baseArtistURL = "https://www.pixiv.net/member_illust.php?id=" + artistID + "&type=illust&p="; //base url for picture pages of an artist 
+	var counter = 1; //page counter
+	await page.goto(baseArtistURL + counter.toString());
 	console.log(page.url());
 	page.on('console', consoleObj => console.log(consoleObj.text()));
-	//await page.screenshot({path: 'test.png', fullPage: true});
-	page.evaluate(() => {
-		var container = document.querySelector("#root");
-		var hits = container.querySelectorAll("li > div > a");
-		console.log(hits.length);
-		console.log(hits[0].innerText);
-		for (i = 0; i < hits.length ; i++){
-			console.log(i);
-			console.log(hits[i].innerText);
-			console.log(hits[i].innerHTML);
-			console.log(hits[i].href);
-		}
-	});
+	var hasNextPage = true;
+	await page.waitForFunction('document.querySelector("#root")');
+	while (hasNextPage){
+		page.evaluate((maxPicPerPage, acceptedPics) => {
+			var container = document.querySelector("#root");
+			var hits = container.querySelectorAll("li > div > a");
+			hasNextPage = (hits.length == maxPicPerPage); 
+			for (i = 0; i < hits.length ; i++){ // go through every image on the page 
+				if (checkImage(browser, page, filter, hits[i].href)){ //check the image page and add if it passes
+					acceptedPics.push(hits[i].href);
+				}
+			}
+		}, maxPicPerPage, acceptedPics);
+		counter++;
+		await page.goto(baseArtistURL + counter.toString());
+		hasNextPage = false;
+	}
+}
+
+//
+async function checkImage(browser, page, filter, imgPageURL){
+	await page.goto(imgPageURL);
+	await page.waitForFunction('document.querySelector("#root")');
+	if(await filter(browser, page, args)){//if it passes requirement
+		return true;
+	} else {
+		return false;
+	}
+	
+}
+
+async function biggerThanFilter(browser, page, xReq, yReq){
+	
+}
+
+async function hasTag(browser, page, tag){
 	
 }
 
@@ -84,5 +111,5 @@ async function stepThroughArtist(browser, page, artistID, filter){
 	await page.screenshot({path: 'wanke.png', fullPage: true});
 	//const images = await page.$$eval('img', imgs => imgs.map(img => img.naturalWidth));
 	//console.log(images); //this gets the image width 
-	stepThroughArtist(browser, page, 24218478);
+	stepThroughArtist(browser, page, 2087042);
 })();
