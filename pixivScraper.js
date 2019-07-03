@@ -93,12 +93,12 @@ async function checkImage(browser, page, filter, imgPageURL, fArgs){
 	//page.waitForNavigation({ waitUntil: 'networkidle0' });
 	await page.screenshot({path: 'preClick.png', fullPage: true});
 	page.on('console', consoleObj => console.log(consoleObj.text()));
-	var singlePiecePage = true;
-	
-	singlePiecePage = false;//set up real code for this later
+	const singlePiecePage = await page.evaluate(() => { 
+	console.log("button count: " + document.querySelectorAll("button").length);
+	return document.querySelectorAll("button").length == 42;}); //check if single or multi page
+	console.log("singlePiecePage: " + singlePiecePage);
 	if (!singlePiecePage){
 		console.log("not single pic page");
-		page.evaluate((singlePiecePage) => {singlePiecePage = document.querySelectorAll("button").length == 42;},singlePiecePage); //check if single or multi page
 		page.evaluate((seeAllButtonPos) => { document.querySelectorAll("button")[seeAllButtonPos].click(); }, seeAllButtonPos); //expands multi image pages
 		await page.waitFor(1000);
 		await page.screenshot({path: 'postClick1.png', fullPage: true});
@@ -106,7 +106,7 @@ async function checkImage(browser, page, filter, imgPageURL, fArgs){
 		await page.waitFor(1000);
 		await page.screenshot({path: 'postClick2.png', fullPage: true});
 		page.evaluate((expandStateTryPos) => { document.querySelectorAll("button")[expandStateTryPos].click(); }, expandStateTryPos);
-		await page.waitFor(5000);
+		await page.waitFor(1000);
 		await page.screenshot({path: 'postClick3.png', fullPage: true});
 	}
 
@@ -136,50 +136,47 @@ async function biggerThanFilter(browser, page, isSingle, xReq, yReq){
 	let imgPageURL = page.url();
 	const imgId = imgPageURL.slice(imgPageURL.indexOf("illust_id=") + 10);
 	var passesFilter = false;
-	
-	if (isSingle){
-		
-	} else { //if there are multiple images on the page
-		return page.evaluate((xReq, yReq, passesFilter, imgId) => {
-			var aList = document.querySelectorAll("a");
-			var picsParsed = 0;
-			for (let i = 0 ; i < aList.length ; i++){
-				var hits = aList[i].querySelectorAll("img");
-				if (hits.length != 0){
-					if (aList[i].innerHTML.indexOf("width=\"") != -1 && aList[i].innerHTML.indexOf(imgId) != -1){
-						picsParsed++;
-						console.log(i);
-						console.log(hits[0].innerText);
-						console.log(aList[i].href);
-						console.log(aList[i].innerHTML);
-						let widthPointer = aList[i].innerHTML.indexOf("width=\"") + 7;
-						console.log("widthPointer: " + aList[i].innerHTML.charAt(widthPointer));
-						let widthStr = "";
-						while (!isNaN(aList[i].innerHTML.charAt(widthPointer))){ //while it points to a number
-							widthStr = widthStr + aList[i].innerHTML.charAt(widthPointer);
-							widthPointer++;
-						}
-						let heightPointer = aList[i].innerHTML.indexOf("height=\"") + 8;
-						console.log("heightPointer: " + aList[i].innerHTML.charAt(heightPointer));
-						let heightStr = "";
-						while (!isNaN(aList[i].innerHTML.charAt(heightPointer))){ //while it points to a number
-							heightStr = heightStr + aList[i].innerHTML.charAt(heightPointer);
-							heightPointer++;
-						}
-						let widthInt = parseInt(widthStr, 10);
-						let heightInt = parseInt(heightStr, 10);
-						if (widthInt > xReq && heightInt > yReq){
-							return true;
-						}
-						//console.log("width is: " + widthStr + " height is: " + heightStr + "");
+	return page.evaluate((xReq, yReq, passesFilter, imgId) => {
+		var aList = document.querySelectorAll("a");
+		var picsParsed = 0;
+		for (let i = 0 ; i < aList.length ; i++){
+			var hits = aList[i].querySelectorAll("img");
+			if (hits.length != 0){
+				if (aList[i].innerHTML.indexOf("width=\"") != -1 && 
+				aList[i].innerHTML.indexOf(imgId) != -1 &&
+				aList[i].innerHTML.indexOf("<img") == 0){
+					picsParsed++;
+					console.log(i);
+					console.log(hits[0].innerText);
+					console.log(aList[i].href);
+					console.log(aList[i].innerHTML);
+					let widthPointer = aList[i].innerHTML.indexOf("width=\"") + 7;
+					console.log("widthPointer: " + aList[i].innerHTML.charAt(widthPointer));
+					let widthStr = "";
+					while (!isNaN(aList[i].innerHTML.charAt(widthPointer))){ //while it points to a number
+						widthStr = widthStr + aList[i].innerHTML.charAt(widthPointer);
+						widthPointer++;
 					}
+					let heightPointer = aList[i].innerHTML.indexOf("height=\"") + 8;
+					console.log("heightPointer: " + aList[i].innerHTML.charAt(heightPointer));
+					let heightStr = "";
+					while (!isNaN(aList[i].innerHTML.charAt(heightPointer))){ //while it points to a number
+						heightStr = heightStr + aList[i].innerHTML.charAt(heightPointer);
+						heightPointer++;
+					}
+					let widthInt = parseInt(widthStr, 10);
+					let heightInt = parseInt(heightStr, 10);
+					if (widthInt > xReq && heightInt > yReq){
+						return true;
+					}
+					//console.log("width is: " + widthStr + " height is: " + heightStr + "");
 				}
-
 			}
-			console.log("parsed: " + picsParsed);
-			return false;
-		}, xReq, yReq, passesFilter, imgId);
-	}
+
+		}
+		console.log("parsed: " + picsParsed);
+		return false;
+	}, xReq, yReq, passesFilter, imgId);
 	console.log("hit end somehow");
 }
 
@@ -195,5 +192,5 @@ async function hasTag(browser, page, isSingle, tag){
 	//const images = await page.$$eval('img', imgs => imgs.map(img => img.naturalWidth));
 	//console.log(images); //this gets the image width 
 	//stepThroughArtist(browser, page, 2087042);
-	checkImage(browser, page, biggerThanFilter, "https://www.pixiv.net/member_illust.php?mode=medium&illust_id=75185900", [1439,1235] );
+	checkImage(browser, page, biggerThanFilter, "https://www.pixiv.net/member_illust.php?mode=medium&illust_id=75165045", [10000,1] );
 })();
