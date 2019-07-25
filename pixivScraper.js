@@ -14,8 +14,8 @@ const maxPicPerPage = 48;
 const seeAllButtonPos = 7;
 const expandStateNextPos = 62;
 const expandStateTryPos = 80;
-let testCounter = 0;
 
+const filters = ["0: Bigger than width,height"];
 
 async function logIn(browser, page){
 	if (fs.existsSync(cookiesFilePath)) {
@@ -67,6 +67,7 @@ async function stepThroughArtist(browser, page, artistID, filter, fArgs){
 	var acceptedPics = [];
 	var baseArtistURL = "https://www.pixiv.net/member_illust.php?id=" + artistID + "&type=illust&p="; //base url for picture pages of an artist 
 	var counter = 1; //page counter
+	await page.waitFor(2000);
 	await page.goto(baseArtistURL + counter.toString());
 	
 	var hasNextPage = true;
@@ -90,35 +91,34 @@ async function stepThroughArtist(browser, page, artistID, filter, fArgs){
 			}
 		}
 		counter++;
+		await page.waitFor(2000);
 		await page.goto(baseArtistURL + counter.toString());
 		hasNextPage = false; //remove this when actually testing<----------------------
 	}
-	console.log("accepted pics: " + acceptedPics);
+	console.log("accepted pictures: ");
+	for (let j = 0 ; j < acceptedPics.length ; j++){
+		console.log(acceptedPics[j]);
+	}
 }
 
 //Checks the specific page and prepares the filters to check if it passes the rule
 async function checkImage(browser, page, filter, imgPageURL, fArgs){
-	testCounter++;
-	console.log("entered checkImage");
+	//console.log("enter checkImage: " + imgPageURL);
 	await page.waitFor(2000);
 	let result = await page.goto(imgPageURL);
-	console.log("result: " + result.status());
+	//console.log("result: " + result.status());
 	await page.waitForFunction('document.querySelector("#root")');
 	//page.waitForNavigation({ waitUntil: 'networkidle0' });
 	await page.screenshot({path: 'preClick.png', fullPage: true});
 	const singlePiecePage = await page.evaluate(() => { //check if single or multi page
-		console.log("singlepiece eval called");
-		console.log("buttons: " + document.querySelectorAll("button").length);
 		for (let i = 0 ; i < document.querySelectorAll("button").length ; i++){
 			if (document.querySelectorAll("button")[i].innerText == "See all"){
 				return false;
 			}
 		}
 		return true;}); 
-	console.log("singlePiecePage: " + singlePiecePage);
-	console.log(page.url());
 	if (!singlePiecePage){
-		console.log("not single pic page");
+		console.log("not single piece page: " + page.url());
 		page.evaluate((seeAllButtonPos) => { document.querySelectorAll("button")[seeAllButtonPos].click(); }, seeAllButtonPos); //expands multi image pages
 		await page.waitFor(1000);
 		/*page.evaluate((expandStateNextPos) => { document.querySelectorAll("button")[expandStateNextPos].click(); }, expandStateNextPos);
@@ -148,6 +148,7 @@ async function checkImage(browser, page, filter, imgPageURL, fArgs){
 
 //Checks if there is a single picture that follows the size requirement
 async function biggerThanFilter(browser, page, isSingle, xReq, yReq){
+	//console.log("entered filter");
 	//let bodyHTML = await page.content();//evaluate(() => document.body.innerHTML);
 	//console.log(bodyHTML);
 	let imgPageURL = page.url();
@@ -177,7 +178,7 @@ async function biggerThanFilter(browser, page, isSingle, xReq, yReq){
 					}
 					let widthInt = parseInt(widthStr, 10);
 					let heightInt = parseInt(heightStr, 10);
-					if (widthInt > xReq && heightInt > yReq){
+					if (widthInt >= xReq && heightInt >= yReq){
 						return true;
 					}
 					//console.log("width is: " + widthStr + " height is: " + heightStr + "");
@@ -194,15 +195,42 @@ async function hasTag(browser, page, isSingle, tag){
 	
 }
 
+async function buildFilter(browser, page){
+	let hasChosenFilter = false;
+	while (!hasChosenFilter){
+		for (let i = 0 ; i < filters.length ; i++){
+			console.log(filters[i]);
+		}
+		let filterID = parseInt(readline.question("Which filter do you want?"),10);
+		if (filterID == 0){ //if its the biggerThanFilter
+			hasChosenFilter = true;
+			let width = parseInt(readline.question("What should the width be bigger than or equal to?"), 10);
+			let height = parseInt(readline.question("What should the height be bigger than or equal to?"), 10);
+			let artistID = 0;
+			let artistFound = false;
+			while (!artistFound){
+				artistID = parseInt(readline.question("What is the artists pixiv ID?"), 10);
+				await page.goto("https://www.pixiv.net/member_illust.php?id=" + artistID );
+				artistFound = await page.evaluate(() => {return 1 == document.querySelectorAll("#root").length;});
+				if (!artistFound){
+					console.log("Artist not found");
+				}
+			}
+			await stepThroughArtist(browser, page, artistID, biggerThanFilter, [width, height]);
+		} else {
+			console.log("Illegal filter ID.");
+		}
+	}
+}
+
 (async() => {
 	const browser = await puppeteer.launch();
 	const page = await browser.newPage();
 	await logIn(browser, page);
-	page.on('console', consoleObj => console.log(consoleObj.text()));
+	//page.on('console', consoleObj => console.log(consoleObj.text()));  //<- For debugging
 	//const images = await page.$$eval('img', imgs => imgs.map(img => img.naturalWidth));
 	//console.log(images); //this gets the image width 
-	//await checkImage(browser, page, biggerThanFilter, "https://www.pixiv.net/member_illust.php?mode=medium&illust_id=75457374", [1,1] );
-	await stepThroughArtist(browser, page, 24218478, biggerThanFilter, [1779, 1000]);
-	console.log("end");
+	await buildFilter(browser, page);
+	console.log("Finished running");
 	await browser.close();
 })();
