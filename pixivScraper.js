@@ -17,6 +17,12 @@ const expandStateTryPos = 80;
 
 const filters = ["0: Bigger than width,height"];
 
+/**
+ * Logs into the users account through command line 
+ * Loads the cookies if available/working, if not creates new cookies and requests login credentials
+ * @param browser The browser that is being logged into 
+ * @param page The page being used to log into
+ */
 async function logIn(browser, page){
 	if (fs.existsSync(cookiesFilePath)) {
 	} else {
@@ -62,7 +68,14 @@ async function logIn(browser, page){
 
 
 
-//Steps through the artists pages, going to the individual art pages
+/**
+ * Steps through the artists pages, going to the individual art pages to check the image against the filter, prints accepted pictures to console.
+ * @param browser The browser being used 
+ * @param page The artists page 
+ * @param artistID The artist's id. https://www.pixiv.net/member_illust.php?id=1 would be id 1.
+ * @param filter The filter function being applied
+ * @param fArgs The arry of arguments for the filter being applied. 
+ */
 async function stepThroughArtist(browser, page, artistID, filter, fArgs){
 	var acceptedPics = [];
 	var baseArtistURL = "https://www.pixiv.net/member_illust.php?id=" + artistID + "&type=illust&p="; //base url for picture pages of an artist 
@@ -99,9 +112,39 @@ async function stepThroughArtist(browser, page, artistID, filter, fArgs){
 	for (let j = 0 ; j < acceptedPics.length ; j++){
 		console.log(acceptedPics[j]);
 	}
+	let chosenToSaveLog = false;
+	while (!chosenToSaveLog){
+		let saveLogAnswer = readline.question("\nDo you wish to save a log? y/n");
+		if (saveLogAnswer == "y" || saveLogAnswer == "yes" || saveLogAnswer == "Yes"){
+			chosenToSaveLog = true;
+			let today = new Date();
+			let logFileName = artistID + "-" + (today.getMonth() + 1) + today.getDate() + today.getHours() + today.getMinutes();
+			let logString = "";
+			for (let i = 0 ; i < acceptedPics.length; i++){
+				logString = logString + acceptedPics[i] + "\n";
+			}
+			fs.writeFile(logFileName + ".txt", logString, (err) => {
+				if (err) throw err;
+				console.log("Accepted pictures list is saved to: " +  logFileName);
+			});
+		} else if (saveLogAnswer == "n" || saveLogAnswer == "no" || saveLogAnswer == "No"){
+			chosenToSaveLog = true;
+		} else {
+			console.log("Please give a real answer.");
+		}
+	}
+	
 }
 
-//Checks the specific page and prepares the filters to check if it passes the rule
+/**
+ * Prepares the image page for the filter 
+ * @param browser The browser being used 
+ * @param page The page 
+ * @param filter The filter function being applied
+ * @param imgPageURL The URL of the image page.
+ * @param fArgs The arry of arguments for the filter being applied. 
+ * @return Returns a boolean based on if the page passed the rule or not
+ */
 async function checkImage(browser, page, filter, imgPageURL, fArgs){
 	//console.log("enter checkImage: " + imgPageURL);
 	await page.waitFor(2000);
@@ -118,7 +161,6 @@ async function checkImage(browser, page, filter, imgPageURL, fArgs){
 		}
 		return true;}); 
 	if (!singlePiecePage){
-		console.log("not single piece page: " + page.url());
 		page.evaluate((seeAllButtonPos) => { document.querySelectorAll("button")[seeAllButtonPos].click(); }, seeAllButtonPos); //expands multi image pages
 		await page.waitFor(1000);
 		/*page.evaluate((expandStateNextPos) => { document.querySelectorAll("button")[expandStateNextPos].click(); }, expandStateNextPos);
@@ -146,7 +188,15 @@ async function checkImage(browser, page, filter, imgPageURL, fArgs){
 	
 }
 
-//Checks if there is a single picture that follows the size requirement
+/**
+ * If the URL contains an image that has a height and width greater than the x requirement and y requirement it returns true.
+ * @param browser The browser being used 
+ * @param page The page 
+ * @param isSingle A boolean that says if the URL contains multiple images
+ * @param xReq The image must have equal or greater width than this.
+ * @param yReq The image must have equal or greater height than this. 
+ * @return Return true if a single image is greater than the width and height requirement.
+ */
 async function biggerThanFilter(browser, page, isSingle, xReq, yReq){
 	//console.log("entered filter");
 	//let bodyHTML = await page.content();//evaluate(() => document.body.innerHTML);
@@ -191,10 +241,23 @@ async function biggerThanFilter(browser, page, isSingle, xReq, yReq){
 	console.log("hit end somehow");
 }
 
+/**
+ * If the image page has a certain tag, return true.
+ * @param browser The browser being used 
+ * @param page The page 
+ * @param isSingle A boolean that says if the URL contains multiple images
+ * @param tag The tag that the page must have.
+ * @return Return true if the page has the tag.
+ */
 async function hasTag(browser, page, isSingle, tag){
 	
 }
 
+/**
+ * Chooses the artist, filter, and builds the filter's paramters.
+ * @param browser The browser being used 
+ * @param page The page 
+ */
 async function buildFilter(browser, page){
 	let hasChosenFilter = false;
 	while (!hasChosenFilter){

@@ -1,1 +1,2 @@
-"# pixivScraper" 
+Scrapes pixiv artist's pages in order to find pictures that fit what you're looking for, such as for wallpapers or pictures with certain themes.
+Do not use this to put an excessive burden on pixiv's servers. I take no responsibility for your use.
