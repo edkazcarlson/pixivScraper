@@ -83,16 +83,15 @@ async function stepThroughArtist(browser, page, artistID, filter, fArgs){
 	await page.waitFor(2000);
 	await page.goto(baseArtistURL + counter.toString());
 	
-	var hasNextPage = true;
+	let hasNextPage = true;
 	await page.waitForFunction('document.querySelector("#root")');
-	await page.screenshot({path: 'arrivedAtArtistPage.png', fullPage: true});
+	
 	while (hasNextPage){
 		let tempPicStorage =  //the list of image page URLS on the artists page
 		await page.evaluate((maxPicPerPage, hasNextPage) => { 
 			var container = document.querySelector("#root");
 			var hits = container.querySelectorAll("li > div > a");
 			let tempPicStorage = [];
-			hasNextPage = (hits.length == maxPicPerPage); 
 			for (i = 0; i < hits.length ; i++){ // go through every image on the page 
 				tempPicStorage.push(hits[i].href);
 			}
@@ -106,32 +105,39 @@ async function stepThroughArtist(browser, page, artistID, filter, fArgs){
 		counter++;
 		await page.waitFor(2000);
 		await page.goto(baseArtistURL + counter.toString());
-		hasNextPage = false; //remove this when actually testing<----------------------
+		await page.waitFor(2000);
+		//hasNextPage = false; //remove this when actually testing<----------------------
+		hasNextPage = (maxPicPerPage == tempPicStorage.length);
+		console.log("hasNextPage: " + hasNextPage);
+		console.log("tempPicStorage.length: " + tempPicStorage.length);
+		if (hasNextPage == false){
+			await page.screenshot({path: 'lastPage.png', fullPage: true});
+		}
+		
 	}
 	console.log("accepted pictures: ");
 	for (let j = 0 ; j < acceptedPics.length ; j++){
 		console.log(acceptedPics[j]);
 	}
-	let chosenToSaveLog = false;
-	while (!chosenToSaveLog){
-		let saveLogAnswer = readline.question("\nDo you wish to save a log? y/n");
-		if (saveLogAnswer == "y" || saveLogAnswer == "yes" || saveLogAnswer == "Yes"){
-			chosenToSaveLog = true;
-			let today = new Date();
-			let logFileName = artistID + "-" + (today.getMonth() + 1) + today.getDate() + today.getHours() + today.getMinutes();
-			let logString = "";
-			for (let i = 0 ; i < acceptedPics.length; i++){
-				logString = logString + acceptedPics[i] + "\n";
-			}
-			fs.writeFile(logFileName + ".txt", logString, (err) => {
-				if (err) throw err;
-				console.log("Accepted pictures list is saved to: " +  logFileName);
-			});
-		} else if (saveLogAnswer == "n" || saveLogAnswer == "no" || saveLogAnswer == "No"){
-			chosenToSaveLog = true;
+	
+	
+	if (getYesNo("Do you wish to save a log?")){
+		let today = new Date();
+		let logFileName = artistID + "-";
+		if (filter == biggerThanFilter){
+			logFileName = logFileName + fArgs[0] + "x" + fArgs[1];
 		} else {
-			console.log("Please give a real answer.");
+			console.log("stepThroughArtist not set up log test format for this");
 		}
+		logFileName = logFileName + "-" + (today.getMonth() + 1) + "-" + today.getDate();
+		let logString = "";
+		for (let i = 0 ; i < acceptedPics.length; i++){
+			logString = logString + acceptedPics[i] + "\n";
+		}
+		fs.writeFile(logFileName + ".txt", logString, (err) => {
+			if (err) throw err;
+			console.log("Accepted pictures list is saved to: " +  logFileName);
+		});
 	}
 	
 }
@@ -148,11 +154,11 @@ async function stepThroughArtist(browser, page, artistID, filter, fArgs){
 async function checkImage(browser, page, filter, imgPageURL, fArgs){
 	//console.log("enter checkImage: " + imgPageURL);
 	await page.waitFor(2000);
+	console.log("going to: " +  imgPageURL);
 	let result = await page.goto(imgPageURL);
 	//console.log("result: " + result.status());
 	await page.waitForFunction('document.querySelector("#root")');
 	//page.waitForNavigation({ waitUntil: 'networkidle0' });
-	await page.screenshot({path: 'preClick.png', fullPage: true});
 	const singlePiecePage = await page.evaluate(() => { //check if single or multi page
 		for (let i = 0 ; i < document.querySelectorAll("button").length ; i++){
 			if (document.querySelectorAll("button")[i].innerText == "See all"){
@@ -184,8 +190,6 @@ async function checkImage(browser, page, filter, imgPageURL, fArgs){
 	} else {
 		return false;
 	}
-	
-	
 }
 
 /**
@@ -202,6 +206,7 @@ async function biggerThanFilter(browser, page, isSingle, xReq, yReq){
 	//let bodyHTML = await page.content();//evaluate(() => document.body.innerHTML);
 	//console.log(bodyHTML);
 	let imgPageURL = page.url();
+	console.log("imgPageURL: " + imgPageURL);
 	const imgId = imgPageURL.slice(imgPageURL.indexOf("illust_id=") + 10);
 	var passesFilter = false;
 	return page.evaluate((xReq, yReq, passesFilter, imgId) => {
@@ -228,6 +233,8 @@ async function biggerThanFilter(browser, page, isSingle, xReq, yReq){
 					}
 					let widthInt = parseInt(widthStr, 10);
 					let heightInt = parseInt(heightStr, 10);
+					console.log("width: " + widthInt);
+					console.log("height: " + heightInt);
 					if (widthInt >= xReq && heightInt >= yReq){
 						return true;
 					}
@@ -267,12 +274,12 @@ async function buildFilter(browser, page){
 		let filterID = parseInt(readline.question("Which filter do you want?"),10);
 		if (filterID == 0){ //if its the biggerThanFilter
 			hasChosenFilter = true;
-			let width = parseInt(readline.question("What should the width be bigger than or equal to?"), 10);
-			let height = parseInt(readline.question("What should the height be bigger than or equal to?"), 10);
+			let width = parseInt(readline.question("What should the width be bigger than or equal to? "), 10);
+			let height = parseInt(readline.question("What should the height be bigger than or equal to? "), 10);
 			let artistID = 0;
 			let artistFound = false;
 			while (!artistFound){
-				artistID = parseInt(readline.question("What is the artists pixiv ID?"), 10);
+				artistID = parseInt(readline.question("What is the artists pixiv ID? "), 10);
 				await page.goto("https://www.pixiv.net/member_illust.php?id=" + artistID );
 				artistFound = await page.evaluate(() => {return 1 == document.querySelectorAll("#root").length;});
 				if (!artistFound){
@@ -286,6 +293,22 @@ async function buildFilter(browser, page){
 	}
 }
 
+function getYesNo(question){
+	let chosenAnswer = false;
+	while (!chosenAnswer){
+		let answerString = readline.question("\n" + question + " y/n ");
+		if (answerString == "y" || answerString == "yes" || answerString == "Yes"){
+			chosenAnswer = true;
+			return true;
+		} else if (answerString == "n" || answerString == "no" || answerString == "No"){
+			chosenAnswer = true;
+			return false;
+		} else {
+			console.log("Please give a real answer.");
+		}
+	}
+}
+
 (async() => {
 	const browser = await puppeteer.launch();
 	const page = await browser.newPage();
@@ -293,7 +316,11 @@ async function buildFilter(browser, page){
 	//page.on('console', consoleObj => console.log(consoleObj.text()));  //<- For debugging
 	//const images = await page.$$eval('img', imgs => imgs.map(img => img.naturalWidth));
 	//console.log(images); //this gets the image width 
-	await buildFilter(browser, page);
+	let goAgain = true;
+	while (goAgain){
+		await buildFilter(browser, page);
+		goAgain = getYesNo("Do you wish to run again?");
+	}
 	console.log("Finished running");
 	await browser.close();
 })();
