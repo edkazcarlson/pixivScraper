@@ -42,7 +42,9 @@ async function logIn(browser, page){
 		}
 		}
 	}
-	await page.goto(loginUrl);
+	
+	await goToPage(page, loginUrl);
+	
 	//await page.waitForNavigation();
 	while (page.url() != pixivUrl){ //while not logged in
 		if (!firstTime){
@@ -81,8 +83,9 @@ async function stepThroughArtist(browser, page, artistID, filter, fArgs){
 	var baseArtistURL = "https://www.pixiv.net/member_illust.php?id=" + artistID + "&type=illust&p="; //base url for picture pages of an artist 
 	var counter = 1; //page counter
 	await page.waitFor(2000);
-	await page.goto(baseArtistURL + counter.toString());
+	await goToPage(page, baseArtistURL + counter.toString());
 	
+		
 	let hasNextPage = true;
 	await page.waitForFunction('document.querySelector("#root")');
 	
@@ -104,7 +107,7 @@ async function stepThroughArtist(browser, page, artistID, filter, fArgs){
 		}
 		counter++;
 		await page.waitFor(2000);
-		await page.goto(baseArtistURL + counter.toString());
+		await goToPage(page, baseArtistURL + counter.toString());
 		await page.waitFor(2000);
 		//hasNextPage = false; //remove this when actually testing<----------------------
 		hasNextPage = (maxPicPerPage == tempPicStorage.length);
@@ -155,7 +158,7 @@ async function checkImage(browser, page, filter, imgPageURL, fArgs){
 	//console.log("enter checkImage: " + imgPageURL);
 	await page.waitFor(2000);
 	console.log("going to: " +  imgPageURL);
-	let result = await page.goto(imgPageURL);
+	await goToPage(page, imgPageURL);
 	//console.log("result: " + result.status());
 	await page.waitForFunction('document.querySelector("#root")');
 	//page.waitForNavigation({ waitUntil: 'networkidle0' });
@@ -271,7 +274,7 @@ async function buildFilter(browser, page){
 		for (let i = 0 ; i < filters.length ; i++){
 			console.log(filters[i]);
 		}
-		let filterID = parseInt(readline.question("Which filter do you want?"),10);
+		let filterID = parseInt(readline.question("Which filter do you want? "),10);
 		if (filterID == 0){ //if its the biggerThanFilter
 			hasChosenFilter = true;
 			let width = parseInt(readline.question("What should the width be bigger than or equal to? "), 10);
@@ -280,8 +283,11 @@ async function buildFilter(browser, page){
 			let artistFound = false;
 			while (!artistFound){
 				artistID = parseInt(readline.question("What is the artists pixiv ID? "), 10);
-				await page.goto("https://www.pixiv.net/member_illust.php?id=" + artistID );
-				artistFound = await page.evaluate(() => {return 1 == document.querySelectorAll("#root").length;});
+				await goToPage(page, "https://www.pixiv.net/member_illust.php?id=" + artistID);
+				artistFound = await page.evaluate(() => {
+					console.log(document.querySelectorAll("#root").length); 
+					return 1 == document.querySelectorAll("#root").length;});
+				await page.screenshot({path:  "goToPageFail.png", fullPage: true});
 				if (!artistFound){
 					console.log("Artist not found");
 				}
@@ -309,11 +315,27 @@ function getYesNo(question){
 	}
 }
 
+async function goToPage(page, url){
+	let reachedPage = false;
+	while (!reachedPage){
+		try {
+			await page.goto(url);
+			reachedPage = true;
+		} catch (err) {
+			readline.question("Could not reach " + url + ", check internet access and try again.");
+			await page.screenshot({path:  "goToPageFail.png", fullPage: true});
+		}
+		if (!reachedPage){
+			await page.screenshot({path:  "goToPageFail.png", fullPage: true});
+		}
+	}
+}
+
 (async() => {
 	const browser = await puppeteer.launch();
 	const page = await browser.newPage();
 	await logIn(browser, page);
-	//page.on('console', consoleObj => console.log(consoleObj.text()));  //<- For debugging
+	page.on('console', consoleObj => console.log(consoleObj.text()));  //<- For debugging
 	//const images = await page.$$eval('img', imgs => imgs.map(img => img.naturalWidth));
 	//console.log(images); //this gets the image width 
 	let goAgain = true;
