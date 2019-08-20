@@ -317,32 +317,107 @@ function getYesNo(question){
 
 async function goToPage(page, url){
 	let reachedPage = false;
+	let pageResult;
 	while (!reachedPage){
+		await page.waitFor(1000);
 		try {
-			await page.goto(url);
+			pageResult = await page.goto(url);
 			reachedPage = true;
 		} catch (err) {
 			readline.question("Could not reach " + url + ", check internet access and try again.");
-			await page.screenshot({path:  "goToPageFail.png", fullPage: true});
 		}
 		if (!reachedPage){
-			await page.screenshot({path:  "goToPageFail.png", fullPage: true});
+			readline.question("Could not reach " + url + ", check internet access and try again.");
 		}
 	}
+	return pageResult;
+}
+
+async function downloadImg(page, url){
+
+	/*
+	0: Assume that any multi-image page has been expanded
+	1: get a list of image to click on
+	2: click on image i
+	3: jump to the image i on the imgSrcPage
+	4: download
+	5: on the original page click out, if there are multiple images, click on next to repeat
+	
+	*/
+	const imgSrcPage = await page.browser().newPage();
+	imgSrcPage.setCookie = page.cookies();
+	
+	await goToPage(page, "https://www.pixiv.net/member_illust.php?mode=medium&illust_id=76260810");
+	await page.screenshot({path: 'arrivedOnPage.png', fullPage: true});
+	//const images = await page.$$eval('img', imgs => imgs.map(img => img.naturalWidth));
+	//console.log(images); //this gets the image width 
+	//page.evaluate(() => { document.querySelector("#root > div.sc-fzXfPG.bAzGJH > div > div > main > section > div.sc-fzXfQX.bAzGKF > div > figure > div > div > div > a > img").click(); });
+	//this is before clicking
+	
+	//gathering pictures to click	
+	let picturesToClick =  [];
+	console.log("(1)picturesToClick is a: " + typeof picturesToClick);
+	/*picturesToClick = */console.log("page.evaluate is returning a : " + 
+	typeof await page.evaluate(() => { 
+		var container = document.querySelector("#root");
+		var hits = container.querySelectorAll("img");
+		let toReturn = [];
+		for (i = 0; i < hits.length ; i++){ 
+			if (hits[i].src.includes("_p0_master1200")) {
+				console.log("pushing");
+				toReturn.push(hits[i]);
+			}
+		}
+		console.log("toReturn: " + toReturn[0].src);
+		console.log(typeof toReturn);
+		return toReturn;
+	}));
+	
+	console.log("(2)picturesToClick is a: " + typeof picturesToClick);
+	console.log("picturesToClick len: " + picturesToClick.length);
+	
+	//click on the image, jump to it in other tab, jump back out of zoom
+	for (let i = 0 ; i < picturesToClick.length ; i++){
+		await page.evaluate((picturesToClick, i, imgSrcPage) => {
+			picturesToClick[i].click();
+			let masterURL = (picturesToClick[i].src.replace("img-original", "img-master")).replace("p0_master1200", "p0");
+			let imgId = masterURL.slice(masterURL.lastIndexOf("/"), masterURL.length - 1);
+			console.log("imgId: " + imgId);
+			var viewSource = goToPage(imgSrcPage, masterURL);
+
+		}, picturesToClick, i, imgSrcPage); 
+		
+		await imgSrcPage.screenshot({path: 'imgSrcPage-Reached.png', fullPage: true});
+		fs.writeFile(imgId, await viewSource.buffer(), function(err) {
+			if(err) {
+				return console.log(err);
+			}
+
+			console.log("The file was saved!");
+		});
+	}
+
+	
+
 }
 
 (async() => {
 	const browser = await puppeteer.launch();
 	const page = await browser.newPage();
+
+	
 	await logIn(browser, page);
 	page.on('console', consoleObj => console.log(consoleObj.text()));  //<- For debugging
+	await page.screenshot({path: 'epic.png', fullPage: true});
+	await downloadImg(page, "hi");
 	//const images = await page.$$eval('img', imgs => imgs.map(img => img.naturalWidth));
 	//console.log(images); //this gets the image width 
+	/*
 	let goAgain = true;
 	while (goAgain){
 		await buildFilter(browser, page);
 		goAgain = getYesNo("Do you wish to run again?");
-	}
+	}*/
 	console.log("Finished running");
 	await browser.close();
 })();
